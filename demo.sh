@@ -24,4 +24,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 apt-get update && apt-get install -y nano fish
 
-psql -U postgres -d sports_club -f ~/init_db.sql
+docker cp init_db.sql my-postgres:/tmp/
+docker exec -it my-postgres psql -U postgres -d sports_club -f /tmp/init_db.sql
+
+docker cp generate_3m_bookings.sql my-postgres:/tmp/
+docker exec -it my-postgres psql -U postgres -d sports_club -f /tmp/generate_3m_bookings.sql
+
+SELECT COUNT(*) FROM attendance_logs;  -- должно быть 3000000
+SELECT COUNT(*) FROM users;            -- 50000
+SELECT COUNT(*) FROM payments;         -- 150000
