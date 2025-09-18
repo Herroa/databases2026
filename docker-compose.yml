@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./demo-big-20170815.sql:/docker-entrypoint-initdb.d/demo-big-20170815.sql
 
 volumes:
   pgdata:
