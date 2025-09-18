@@ -1,0 +1,33 @@
+SELECT full_name FROM user_profiles WHERE user_id=1; — выборка с условием.
+
+INSERT INTO users (email, phone) VALUES ('test@mail.com', '+79995553322'); — вставка строки.
+
+UPDATE users SET phone='+79990001122' WHERE id=1; — обновление данных.
+
+DELETE FROM users WHERE id=3; — удаление строки.
+
+CREATE TABLE test (id SERIAL PRIMARY KEY, name TEXT); — создать таблицу.
+
+DROP TABLE test; — удалить таблицу.
+
+\l — список баз данных.
+
+\c sports_club — подключиться к базе sports_club.
+
+\dt — список таблиц.
+
+\d users — описание таблицы users (структура, колонки, типы).
+
+\du — список ролей/пользователей.
+
+\dn — список схем.
+
+\q — выйти из psql.
+
+\password postgres — сменить пароль пользователя.
+
+\! ls — выполнить команду оболочки (например, ls в Linux).
+
+\timing — показать время выполнения SQL-запросов.
+
+\x — включить «расширенный» (удобный) вывод данных.
