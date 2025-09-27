@@ -8,26 +8,22 @@ DELETE FROM users WHERE id=3; — удаление строки.
 
 CREATE TABLE test (id SERIAL PRIMARY KEY, name TEXT); — создать таблицу.
 
-DROP TABLE test; — удалить таблицу.
+DROP TABLE test; — удалить таблицу
+DROP DATABASE test; — удалить базу
+docker exec -it my-postgres psql -U postgres -c "DROP DATABASE sports_club;"
 
-\l — список баз данных.
+psql commands
+\l                          -- список БД
+\c mydb                     -- переключиться на mydb
+\dt                         -- список таблиц
+\d users                    -- структура таблицы users
+\x                          -- включить вертикальный вывод
+\df                         -- список функций
+\du                         -- список ролей
+\conninfo                   -- текущее подключение
+\q                          -- выход
 
-\c sports_club — подключиться к базе sports_club.
-
-\dt — список таблиц.
-
-\d users — описание таблицы users (структура, колонки, типы).
-
-\du — список ролей/пользователей.
-
-\dn — список схем.
-
-\q — выйти из psql.
-
-\password postgres — сменить пароль пользователя.
-
-\! ls — выполнить команду оболочки (например, ls в Linux).
-
-\timing — показать время выполнения SQL-запросов.
-
-\x — включить «расширенный» (удобный) вывод данных.
+apt-get update && apt-get install -y nano fish
+SELECT COUNT(*) FROM attendance_logs;  -- должно быть 3000000
+SELECT COUNT(*) FROM users;            -- 50000
+SELECT COUNT(*) FROM payments;         -- 150000

@@ -1,35 +1,7 @@
-# docker-compose up -d
-
-
-docker exec -i my-postgres psql -U postgres -d  postgres -f /docker-entrypoint-initdb.d/demo-big-20170815.sql
-
--U username
--d database
-
-psql commands
-\l                          -- список БД
-\c mydb                     -- переключиться на mydb
-\dt                         -- список таблиц
-\d users                    -- структура таблицы users
-SELECT * FROM users LIMIT 5;
-\x                          -- включить вертикальный вывод
-\df                         -- список функций
-\du                         -- список ролей
-\conninfo                   -- текущее подключение
-\q                          -- выход
-
-CREATE DATABASE sports_club ENCODING 'UTF8' LC_COLLATE 'en_US.UTF-8' LC_CTYPE 'en_US.UTF-8' TEMPLATE template0;
-\c sports_club
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-apt-get update && apt-get install -y nano fish
+docker exec -it my-postgres psql -U postgres -c "CREATE DATABASE sports_club ENCODING 'UTF8' LC_COLLATE 'en_US.UTF-8' LC_CTYPE 'en_US.UTF-8' TEMPLATE template0";
 
 docker cp init_db.sql my-postgres:/tmp/
 docker exec -it my-postgres psql -U postgres -d sports_club -f /tmp/init_db.sql
 
 docker cp generate_3m_bookings.sql my-postgres:/tmp/
 docker exec -it my-postgres psql -U postgres -d sports_club -f /tmp/generate_3m_bookings.sql
-
-SELECT COUNT(*) FROM attendance_logs;  -- должно быть 3000000
-SELECT COUNT(*) FROM users;            -- 50000
-SELECT COUNT(*) FROM payments;         -- 150000
