@@ -1,4 +1,4 @@
-module crud
+module databases2026
 
 go 1.23
 
