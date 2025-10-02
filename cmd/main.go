@@ -175,7 +175,7 @@ func initSportsDb() {
 		fmt.Println("InitDataBase:", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer dbSportsClub.Close()
 	fmt.Println("✅ Подключено к 'sports_club' БД")
 
 	// Функция для выполнения SQL из файла
