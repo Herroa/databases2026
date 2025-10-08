@@ -8,4 +8,5 @@
  - ``` $ go run main.go -init ```
 
 ## 3. Run tests
+ - ``` $ cd ./cmd/ ```
  - ``` $ go run main.go -test ```
