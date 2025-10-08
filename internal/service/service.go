@@ -164,13 +164,9 @@ func GetCoachRatingWithRowNumber(db *sql.DB) {
 // --- JOIN 2 таблицы (2) ---
 func GetUsersWithLoyalty(db *sql.DB) {
 	const query = `
-		SELECT coach_id, AVG(rating) AS avg_rating,
-		ROW_NUMBER() OVER (ORDER BY AVG(rating) DESC) AS rn
-		FROM reviews
-		WHERE coach_id IS NOT NULL
-		GROUP BY coach_id
-		HAVING AVG(rating) >= 3.0
-		ORDER BY avg_rating DESC
+		SELECT u.email, lp.points
+		FROM users u
+		JOIN loyalty_points lp ON u.id = lp.user_id
 		LIMIT 5
 	`
 
