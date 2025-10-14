@@ -1,3 +1,9 @@
+# Подключение к Primary (порт 5432)
+psql -h localhost -p 5432 -U postgres -d postgres
+
+# Подключение к Replica (порт 5433)
+psql -h localhost -p 5433 -U postgres -d postgres
+
 SELECT full_name FROM user_profiles WHERE user_id=1; — выборка с условием.
 
 INSERT INTO users (email, phone) VALUES ('test@mail.com', '+79995553322'); — вставка строки.
