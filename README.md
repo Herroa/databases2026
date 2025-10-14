@@ -9,3 +9,8 @@
 
 ## 3. Run tests
  - ``` $ go run main.go -test ```
+
+
+## Benchmarks (partition + unlogged)
+ - ``` $ cd cmd```
+ - ``` $ go run main.go -benchmark```
