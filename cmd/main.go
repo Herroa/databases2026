@@ -2,14 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
-	"log"
-	"time"
-	"os"
-	"flag"
-	"databases2026/pkg/model"
 	"databases2026/internal/handler"
 	"databases2026/internal/service"
+	"databases2026/pkg/model"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -32,44 +32,44 @@ var sportsDb = model.DbConnectionSettings{
 
 func crudTests(db *sql.DB) {
 	userID, err := handler.CreateUser(db, "test78@example.com")
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateUser: ", err)
 		os.Exit(1)
 	}
 
 	err = handler.CreateCoach(db, userID)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateCoach: ", err)
 		os.Exit(1)
 	}
 
 	sportID, err := handler.CreateSport(db, "Pilates")
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateSport: ", err)
 		os.Exit(1)
 	}
 
 	classID, err := handler.CreateClass(db, sportID, userID)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateClass: ", err)
 		os.Exit(1)
 	}
 
 	roomID, err := handler.CreateRoom(db, 20)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateRoom: ", err)
 		os.Exit(1)
 	}
 
 	schedID, err := handler.CreateSchedule(
 		db, classID, roomID, time.Now(), time.Now().Add(time.Hour))
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateSchedule: ", err)
 		os.Exit(1)
 	}
 
 	bookingID, err := handler.CreateBooking(db, userID, schedID)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("CreateBooking: ", err)
 		os.Exit(1)
 	}
@@ -123,7 +123,7 @@ func testSportClubDb() {
 		os.Exit(1)
 	}
 
-	if (!isExist) {
+	if !isExist {
 		log.Fatalf("'sports_club' database doesn't exists")
 		os.Exit(1)
 	}
@@ -150,7 +150,7 @@ func initSportsDb() {
 		os.Exit(1)
 	}
 
-	if (isExist) {
+	if isExist {
 		log.Fatalf("'sports_club' database already exists")
 		os.Exit(1)
 	}
@@ -202,22 +202,52 @@ func initSportsDb() {
 func main() {
 	initFlag := flag.Bool("init", false, "Initialization of 'sports_club' database")
 	testFlag := flag.Bool("test", false, "Test bench with 'sports_club' database")
+	benchmarkFlag := flag.Bool("benchmark", false, "Run performance benchmarks")
+
 	flag.Parse()
 
-	if (!*initFlag && !*testFlag) {
+	flags := 0
+	if *initFlag {
+		flags++
+	}
+	if *testFlag {
+		flags++
+	}
+	if *benchmarkFlag {
+		flags++
+	}
+
+	if flags == 0 {
+		fmt.Println("Error: no flag provided")
 		flag.Usage()
 		os.Exit(1)
 	}
-
-	if (*initFlag && *testFlag) {
-		fmt.Println("You need to choose one flag!!!!!!")
+	if flags > 1 {
+		fmt.Println("Error: only one flag allowed")
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if *initFlag {
 		initSportsDb()
-	} else {
+	} else if *testFlag {
 		testSportClubDb()
+	} else if *benchmarkFlag {
+		// 🔥 НОВЫЙ БЛОК: запуск бенчмарка
+		db, err := handler.InitDataBase(sportsDb)
+		if err != nil {
+			fmt.Println("InitDataBase:", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		isExist, err := handler.DbIsExist(db)
+		if err != nil || !isExist {
+			log.Fatalf("'sports_club' database doesn't exist or connection failed")
+		}
+
+		fmt.Println("✅ Connected to 'sports_club' for benchmark")
+		service.RunBenchmark(db)
+		fmt.Println("✅ Benchmark completed")
 	}
 }
