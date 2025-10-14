@@ -1,0 +1,34 @@
+version: '3.9'
+
+services:
+  pg-master:
+    image: postgres:16
+    container_name: pg-master
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata/master:/var/lib/postgresql/data
+      - ./docker/master:/docker/master
+      - ./backups:/backups
+    entrypoint: ["/docker/master/entrypoint_master.sh"]
+
+  pg-replica:
+    image: postgres:16
+    container_name: pg-replica
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    depends_on:
+      - pg-master
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./pgdata/replica:/var/lib/postgresql/data
+      - ./docker/replica:/docker/replica
+    entrypoint: ["/docker/replica/entrypoint_replica.sh"]
+
+volumes:
+  pgdata:
