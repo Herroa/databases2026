@@ -1,0 +1,11 @@
+=== ЗАДАНИЕ 1: Партицирование ===
+Условие: attendance_logs — самая большая таблица
+Партицирование: по start_time (месячные партиции)
+
+Запрос: SELECT COUNT(*) WHERE start_time >= '2024-05-01'
+  Partitioned: 831.916µs
+  Original:    1.613785ms
+
+Запрос: SELECT COUNT(*) WHERE user_id = 12345
+  Partitioned: 1.943914ms
+  Original:    1.387935ms
