@@ -1,7 +1,7 @@
 version: '3.9'
 
 services:
-  postgres:
+  primary:
     image: postgres:16
     container_name: my-postgres
     environment:
@@ -11,7 +11,42 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - primary_/var/lib/postgresql/data
+      - ./replication-setup.sh:/docker-entrypoint-initdb.d/replication-setup.sh
+    networks:
+      - pg-replication
+
+  replica:
+    image: postgres:16
+    container_name: pg-replica
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "5433:5432"
+    volumes:
+      - replica_/var/lib/postgresql/data
+    networks:
+      - pg-replication
+    depends_on:
+      - primary
+    command: >
+      bash -c "
+        until pg_isready -h primary -U postgres; do
+          echo 'Ждём Primary...';
+          sleep 2;
+        done;
+        echo 'Настраиваем Replica...';
+        rm -rf /var/lib/postgresql/data/*;
+        PGPASSWORD=postgres pg_basebackup -h primary -U replicator -D /var/lib/postgresql/data -P -v -R --wal-method=stream;
+        echo 'Запускаем PostgreSQL в режиме Replica...';
+        docker-entrypoint.sh postgres
+      "
 
 volumes:
-  pgdata:
+  primary_
+  replica_
+
+networks:
+  pg-replication:
+    driver: bridge
