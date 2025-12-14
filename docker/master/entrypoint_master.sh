@@ -1,19 +1,20 @@
 #!/bin/bash
 set -e
 
-echo "🏁 Initializing master PostgreSQL..."
-
-# Стандартная инициализация
 docker-entrypoint.sh postgres &
 
-# Ждём, пока сервер запустится
 until pg_isready -U postgres; do
   sleep 2
 done
 
-# Создаём пользователя и слот репликации
-psql -U postgres -c "CREATE ROLE replica WITH REPLICATION PASSWORD 'replica' LOGIN;"
-psql -U postgres -c "SELECT * FROM pg_create_physical_replication_slot('replica_slot');"
+psql -U postgres <<EOF
+ALTER SYSTEM SET wal_level = replica;
+ALTER SYSTEM SET max_wal_senders = 5;
+ALTER SYSTEM SET wal_keep_size = '64MB';
+ALTER SYSTEM SET listen_addresses = '*';
+SELECT pg_reload_conf();
+EOF
 
-echo "✅ Master ready for replication"
+psql -U postgres -f /docker/master/init-replication.sql
+
 wait

@@ -3,7 +3,6 @@ version: '3.9'
 services:
   pg-master:
     image: postgres:16
-    container_name: pg-master
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -11,24 +10,35 @@ services:
       - "5433:5432"
     volumes:
       - ./pgdata/master:/var/lib/postgresql/data
-      - ./docker/master:/docker/master
+      - ./master:/docker/master
       - ./backups:/backups
     entrypoint: ["/docker/master/entrypoint_master.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   pg-replica:
     image: postgres:16
-    container_name: pg-replica
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     depends_on:
-      - pg-master
+      pg-master:
+        condition: service_healthy
     ports:
       - "5434:5432"
     volumes:
       - ./pgdata/replica:/var/lib/postgresql/data
-      - ./docker/replica:/docker/replica
+      - ./replica:/docker/replica
     entrypoint: ["/docker/replica/entrypoint_replica.sh"]
 
-volumes:
-  pgdata:
+  pg-backup:
+    image: postgres:16
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./backups:/backups
+      - ./backup:/docker/backup
+    entrypoint: ["/docker/backup/backup.sh"]
