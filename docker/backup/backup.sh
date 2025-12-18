@@ -7,7 +7,7 @@ until pg_isready -h pg-master -U postgres; do
   sleep 2
 done
 
-echo "✅ pg-master is ready, starting backup loop"
+echo "pg-master is ready, starting backup loop"
 
 while true; do
   TS=$(date +"%Y-%m-%d_%H-%M-%S")
