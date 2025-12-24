@@ -1,0 +1,38 @@
+HSET user:1 id 1 email ivan@test.com
+HSET user:2 id 2 email petr@test.com
+HSET user:3 id 3 email anna@test.com
+HSET user:4 id 4 email coach1@test.com
+HSET user:5 id 5 email coach2@test.com
+
+SADD coaches 4 5
+
+HSET sport:1 id 1 name Yoga
+HSET sport:2 id 2 name Boxing
+HSET sport:3 id 3 name Crossfit
+
+HSET room:1 id 1 capacity 10
+HSET room:2 id 2 capacity 20
+HSET room:3 id 3 capacity 30
+
+HSET class:1 id 1 sport_id 1 coach_id 4
+HSET class:2 id 2 sport_id 2 coach_id 5
+HSET class:3 id 3 sport_id 3 coach_id 4
+
+HSET schedule:1 id 1 class_id 1 room_id 1 start 2025-01-10T18:00 end 2025-01-10T19:00
+HSET schedule:2 id 2 class_id 2 room_id 2 start 2025-01-11T18:00 end 2025-01-11T19:00
+HSET schedule:3 id 3 class_id 3 room_id 3 start 2025-01-12T18:00 end 2025-01-12T19:00
+
+SET schedule:1:bookings 2
+SET schedule:2:bookings 1
+SET schedule:3:bookings 0
+
+SET loyalty:1 100
+SET loyalty:2 50
+SET loyalty:3 20
+
+HSET promo:1 code WELCOME10 discount 10 valid_until 2025-02-01
+HSET promo:2 code FIT20 discount 20 valid_until 2025-03-01
+
+SADD users 1 2 3 4 5
+SADD sports 1 2 3
+SADD schedules 1 2 3

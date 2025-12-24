@@ -1,0 +1,104 @@
+------- Инициализация ------------
+$ docker-compose up -d
+
+$ docker exec -it redis-1 redis-cli --cluster create \
+  redis-1:6379 redis-2:6379 redis-3:6379 \
+  redis-4:6379 redis-5:6379 redis-6:6379 \
+  --cluster-replicas 1
+...
+...
+Can I set the above configuration? (type 'yes' to accept):
+ yes
+
+--------- Инициализация данными -------------
+
+$ docker exec -i redis-1 redis-cli -c < seed.redis
+
+--------- Вход -----------
+
+$ docker exec -it redis-1 redis-cli -c
+
+--------- Проверка Кластера -----------
+
+127.0.0.1:6379> CLUSTER NODES
+
+d974fa030ef6ad7bc4402fe022e7c721f40d0ce1 172.26.0.3:6379@16379 slave 20f7d5114a19622962528d544f2a4b567860b793 0 1766579252504 1 connected
+20f7d5114a19622962528d544f2a4b567860b793 172.26.0.4:6379@16379 myself,master - 0 1766579253000 1 connected 0-5460
+5e322b8004c5bcf43a0db31a86b59e95e4acafa8 172.26.0.5:6379@16379 slave ed88dedb4bf198aee9db53076fd673439a5edca9 0 1766579252504 2 connected
+a022f6b6427ebefdd9b432e1d2fa8465adbe343e 172.26.0.6:6379@16379 master - 0 1766579253000 3 connected 10923-16383
+6733dc145c8abac808bac30af371f63844c32424 172.26.0.2:6379@16379 slave a022f6b6427ebefdd9b432e1d2fa8465adbe343e 0 1766579253609 3 connected
+ed88dedb4bf198aee9db53076fd673439a5edca9 172.26.0.7:6379@16379 master - 0 1766579253609 2 connected 5461-10922
+
+127.0.0.1:6379> CLUSTER INFO
+
+cluster_state:ok
+cluster_slots_assigned:16384
+cluster_slots_ok:16384
+cluster_slots_pfail:0
+cluster_slots_fail:0
+cluster_known_nodes:6
+cluster_size:3
+cluster_current_epoch:6
+cluster_my_epoch:1
+cluster_stats_messages_ping_sent:294
+cluster_stats_messages_pong_sent:298
+cluster_stats_messages_sent:592
+cluster_stats_messages_ping_received:293
+cluster_stats_messages_pong_received:294
+cluster_stats_messages_meet_received:5
+cluster_stats_messages_received:592
+total_cluster_links_buffer_limit_exceeded:0
+
+------------- ПРОВЕРКА ДАННЫХ -----------------
+KEYS *                     -- DEV ONLY
+SCAN 0                     -- safe
+SCAN 0 MATCH user:*        -- safe + filter
+TYPE key                   -- type
+HGETALL key                -- hash
+GET key                    -- string
+SMEMBERS key               -- set
+TTL key                    -- expiration
+
+## Посмотреть все записи
+KEYS *
+
+## Получить пользователя
+HGETALL user:2
+
+## Получить все расписания
+SMEMBERS schedules
+
+HGETALL schedule:1
+HGETALL schedule:2
+HGETALL schedule:3
+
+## Получить тренера занятия
+HGET class:1 coach_id
+HGET user:4 email
+
+## Проверить есть ли свободные места
+HGET room:1 capacity
+GET schedule:1:bookings
+
+## Баллы лояльности
+GET loyalty:1
+
+## ВРЕМЕННАЯ БРОНЬ (TTL)
+HSET temp_booking:abc123 user_id 1 schedule_id 1
+EXPIRE temp_booking:abc123 300
+TTL temp_booking:abc123
+
+## КЭШИРОВАНИЕ (Cache Aside)
+HSET schedule:1:view sport Yoga coach coach1@test.com
+EXPIRE schedule:1:view 120
+
+HGETALL schedule:1:view
+
+## АТОМАРНОЕ БРОНИРОВАНИЕ (Redis)
+INCR schedule:1:bookings
+
+DECR schedule:1:bookings
+
+## ПРОВЕРКА ШАРДИНГА
+CLUSTER KEYSLOT user:1
+CLUSTER KEYSLOT user:2
