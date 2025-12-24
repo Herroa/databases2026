@@ -12,7 +12,21 @@ Can I set the above configuration? (type 'yes' to accept):
 
 --------- Инициализация данными -------------
 
+## Тестовые данные НЕ из postgres
+
 $ docker exec -i redis-1 redis-cli -c < seed.redis
+
+## Наполнение данными из postgres
+
+$ npm install pg ioredis
+$ node seed_redis.js
+(node:1784738) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/lilomox/Work/Study/4-course/base/databases2026/docker/redis/seed_redis.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/lilomox/Work/Study/4-course/base/databases2026/docker/redis/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Users seeded
+Schedules seeded
+✅ Redis Cluster seeding finished
 
 --------- Вход -----------
 
