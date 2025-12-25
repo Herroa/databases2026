@@ -12,5 +12,19 @@ services:
       - mongo_data:/data/db
       - ./mongo-init:/docker-entrypoint-initdb.d
 
+  mongo-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: mongo-exporter
+    restart: always
+    depends_on:
+      - mongo
+    ports:
+      - "9216:9216"
+    environment:
+      MONGODB_URI: "mongodb://mongo:27017/admin?replicaSet=rs0"
+    command:
+      - "--collect-all"
+      - "--compatible-mode"
+
 volumes:
   mongo_data:
