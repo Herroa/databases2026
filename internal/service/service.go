@@ -9,88 +9,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// =============== БИЗНЕС-ЗАПРОСЫ ===============
-
-// --- Агрегирующие (4) ---
-func GetTotalRevenue(db *sql.DB) float64 {
-	var total float64
-	db.QueryRow(`
-		SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'completed'
-	`).Scan(&total)
-	return total
-}
-
-func GetAvgClassRating(db *sql.DB) float64 {
-	var avg float64
-	db.QueryRow("SELECT COALESCE(AVG(rating), 0) FROM reviews").Scan(&avg)
-	return avg
-}
-
-func GetBookingsPerDay(db *sql.DB) {
-	const query = `
-		SELECT DATE(start_time) AS day, COUNT(*) AS bookings
-		FROM schedules s
-		JOIN bookings b ON s.id = b.schedule_id
-		GROUP BY day
-		ORDER BY day DESC
-		LIMIT 7
-	`
-
-	rows, _ := db.Query(query)
-	defer rows.Close()
-
-	for rows.Next() {
-		var day time.Time
-		var cnt int
-		rows.Scan(&day, &cnt)
-		fmt.Printf("📅 %s: %d bookings\n", day.Format("2006-01-02"), cnt)
-	}
-}
-
-func GetTopSportsByAttendance(db *sql.DB) {
-	const query = `
-		SELECT sp.name, COUNT(*) AS visits
-		FROM attendance_logs al
-		JOIN bookings b ON al.user_id = b.user_id
-		JOIN schedules s ON b.schedule_id = s.id
-		JOIN classes c ON s.class_id = c.id
-		JOIN sports sp ON c.sport_id = sp.id
-		GROUP BY sp.name
-		ORDER BY visits DESC
-		LIMIT 5
-	`
-
-	rows, _ := db.Query(query)
-	defer rows.Close()
-
-	for rows.Next() {
-		var name string
-		var visits int
-		rows.Scan(&name, &visits)
-		fmt.Printf("🏆 %s: %d visits\n", name, visits)
-	}
-}
-
-// --- Оконные функции (4) ---
-func GetUserRankByLoyalty(db *sql.DB) {
-	const query = `
-		SELECT user_id, points,
-		RANK() OVER (ORDER BY points DESC) AS rank
-		FROM loyalty_points
-		ORDER BY rank
-		LIMIT 10
-	`
-
-	rows, _ := db.Query(query)
-	defer rows.Close()
-
-	for rows.Next() {
-		var uid, pts, rank int
-		rows.Scan(&uid, &pts, &rank)
-		fmt.Printf("🏅 User %d: %d pts (rank %d)\n", uid, pts, rank)
-	}
-}
-
 func GetRunningTotalRevenue(db *sql.DB) {
 	const query = `
 		SELECT id, amount, 
@@ -134,30 +52,6 @@ func GetClassBookingsWithMovingAvg(db *sql.DB) {
 		var avg float64
 		rows.Scan(&cid, &bookings, &avg)
 		fmt.Printf("📚 Class %d: %d bookings (avg: %.2f)\n", cid, bookings, avg)
-	}
-}
-
-func GetCoachRatingWithRowNumber(db *sql.DB) {
-	const query = `
-		SELECT coach_id, AVG(rating) AS avg_rating,
-		ROW_NUMBER() OVER (ORDER BY AVG(rating) DESC) AS rn
-		FROM reviews
-		WHERE coach_id IS NOT NULL
-		GROUP BY coach_id
-		HAVING AVG(rating) >= 3.0
-		ORDER BY avg_rating DESC
-		LIMIT 5
-	`
-
-	rows, _ := db.Query(query)
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var avg float64
-		var rn int
-		rows.Scan(&cid, &avg, &rn)
-		fmt.Printf("👨‍🏫 Coach %d: %.2f ★ (rank %d)\n", cid, avg, rn)
 	}
 }
 
@@ -317,7 +211,7 @@ func GetScheduleWithRoomAndSport(db *sql.DB) {
 		var coach int
 		rows.Scan(&start, &sport, &cap, &coach)
 		fmt.Printf("🏋️ %s at %s in room (cap %d) by coach %d\n",
-		          sport, start.Format("15:04"), cap, coach)
+			sport, start.Format("15:04"), cap, coach)
 	}
 }
 
@@ -343,6 +237,6 @@ func GetFullBookingInfo(db *sql.DB) {
 		var start time.Time
 		rows.Scan(&email, &sport, &coach, &cap, &start)
 		fmt.Printf("✅ %s booked %s (coach %d) in room (cap %d) at %s\n",
-		          email, sport, coach, cap, start.Format("15:04"))
+			email, sport, coach, cap, start.Format("15:04"))
 	}
 }

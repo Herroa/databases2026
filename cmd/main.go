@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"databases2026/pkg/model"
 
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 /*
@@ -25,7 +27,7 @@ import (
 
 var commonDb = model.DbConnectionSettings{
 	Host:         "localhost",
-	Port:         5433, // ⬅️ pg-master
+	Port:         5433,
 	User:         "postgres",
 	Password:     "postgres",
 	DataBaseName: "postgres",
@@ -33,10 +35,16 @@ var commonDb = model.DbConnectionSettings{
 
 var sportsDb = model.DbConnectionSettings{
 	Host:         "localhost",
-	Port:         5433, // ⬅️ pg-master
+	Port:         5433,
 	User:         "postgres",
 	Password:     "postgres",
 	DataBaseName: "sports_club",
+}
+
+func measure(title string, fn func()) {
+	start := time.Now()
+	fn()
+	fmt.Printf("⏱ %s took %v\n", title, time.Since(start))
 }
 
 func crudTests(db *sql.DB) {
@@ -92,28 +100,17 @@ func crudTests(db *sql.DB) {
 	handler.DeleteUser(db, userID)
 }
 
-func businessCases(db *sql.DB) {
+func businessCases(db *sql.DB, rdb redis.UniversalClient, ctx context.Context) {
 	fmt.Println("\n📊 Агрегирующие запросы")
-	fmt.Printf("Общий доход: $%.2f\n", service.GetTotalRevenue(db))
-	fmt.Printf("Средний рейтинг: %.2f\n", service.GetAvgClassRating(db))
-	service.GetBookingsPerDay(db)
-	service.GetTopSportsByAttendance(db)
 
-	fmt.Println("\n🪟 Оконные функции")
-	service.GetUserRankByLoyalty(db)
-	service.GetRunningTotalRevenue(db)
-	service.GetClassBookingsWithMovingAvg(db)
-	service.GetCoachRatingWithRowNumber(db)
+	total, _ := service.GetTotalRevenue(db, rdb, ctx)
+	fmt.Printf("Общий доход: $%.2f\n", total)
 
-	fmt.Println("\n🔗 JOIN-запросы")
-	service.GetUsersWithLoyalty(db)
-	service.GetActiveMemberships(db)
-	service.GetBookingsWithDetails(db)
-	service.GetPaymentsWithMembership(db)
-	service.GetReviewsWithCoachInfo(db)
-	service.GetReferralRewards(db)
-	service.GetScheduleWithRoomAndSport(db)
-	service.GetFullBookingInfo(db)
+	avg, _ := service.GetAvgClassRating(db, rdb, ctx)
+	fmt.Printf("Средний рейтинг: %.2f\n", avg)
+
+	service.GetBookingsPerDay(db, rdb, ctx)
+	service.GetTopSportsByAttendance(db, rdb, ctx)
 }
 
 func testSportClubDb() {
@@ -122,6 +119,23 @@ func testSportClubDb() {
 		log.Fatal("InitDataBase:", err)
 	}
 	defer db.Close()
+
+	rdb := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{
+			"localhost:7002",
+			"localhost:7003",
+			"localhost:7004",
+			"localhost:7005",
+			"localhost:7006",
+			"localhost:7007",
+		},
+	})
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatal("cannot connect to Redis:", err)
+	}
+
+	defer rdb.Close()
 
 	exists, err := handler.DbIsExist(db)
 	if err != nil {
@@ -135,7 +149,16 @@ func testSportClubDb() {
 	fmt.Println("✅ Подключение к sports_club")
 
 	crudTests(db)
-	businessCases(db)
+
+	fmt.Println("\n🚀 Первый запуск (Redis MISS → Postgres)")
+	measure("businessCases #1", func() {
+		businessCases(db, rdb, ctx)
+	})
+
+	fmt.Println("\n⚡ Второй запуск (Redis HIT)")
+	measure("businessCases #2", func() {
+		businessCases(db, rdb, ctx)
+	})
 }
 
 func initSportsDb() {
