@@ -1,2 +1,4 @@
 docker/pgdata/
 docker/backups/
+docker/neo4j
+rest-api/node_modules
