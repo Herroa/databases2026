@@ -1,0 +1,94 @@
+version: '3.9'
+
+services:
+  pg-master:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata/master:/var/lib/postgresql/data
+      - ./master:/docker/master
+      - ./backups:/backups
+    entrypoint: ["/docker/master/entrypoint_master.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pg-replica:
+    image: postgres:16
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./pgdata/replica:/var/lib/postgresql/data
+      - ./replica:/docker/replica
+    entrypoint: ["/docker/replica/entrypoint_replica.sh"]
+
+  pg-backup:
+    image: postgres:16
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./backups:/backups
+      - ./backup:/docker/backup
+    entrypoint: ["/docker/backup/backup.sh"]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@pg-master:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - postgres-exporter
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+
+volumes:
+  grafana_data:

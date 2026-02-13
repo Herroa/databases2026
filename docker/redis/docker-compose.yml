@@ -1,0 +1,96 @@
+version: "3.9"
+
+networks:
+  redis-net:
+    driver: bridge
+
+services:
+  redis-1:
+    image: redis:7.2
+    container_name: redis-1
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7002:6379"
+    networks:
+      - redis-net
+
+  redis-2:
+    image: redis:7.2
+    container_name: redis-2
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7003:6379"
+    networks:
+      - redis-net
+
+  redis-3:
+    image: redis:7.2
+    container_name: redis-3
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7004:6379"
+    networks:
+      - redis-net
+
+  redis-4:
+    image: redis:7.2
+    container_name: redis-4
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7005:6379"
+    networks:
+      - redis-net
+
+  redis-5:
+    image: redis:7.2
+    container_name: redis-5
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7006:6379"
+    networks:
+      - redis-net
+
+  redis-6:
+    image: redis:7.2
+    container_name: redis-6
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --protected-mode no
+    ports:
+      - "7007:6379"
+    networks:
+      - redis-net
