@@ -6,227 +6,209 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"time"
 
-	"databases2026/internal/handler"
-	"databases2026/internal/service"
-	"databases2026/pkg/model"
+	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
-/*
-	НАСТРОЙКИ ПОД DOCKER COMPOSE
+const (
+	mongoURI = "mongodb://localhost:27017"
+	mongoDB  = "sport_club"
+)
 
-	pg-master:
-	  ports:
-	    - "5433:5432"
-*/
+var (
+	commonDb = DbConnectionSettings{
+		Host:         "localhost",
+		Port:         5433,
+		User:         "postgres",
+		Password:     "postgres",
+		DataBaseName: "postgres",
+	}
 
-var commonDb = model.DbConnectionSettings{
-	Host:         "localhost",
-	Port:         5433,
-	User:         "postgres",
-	Password:     "postgres",
-	DataBaseName: "postgres",
+	sportsDb = DbConnectionSettings{
+		Host:         "localhost",
+		Port:         5433,
+		User:         "postgres",
+		Password:     "postgres",
+		DataBaseName: "sports_club",
+	}
+)
+
+type DbConnectionSettings struct {
+	Host, User, Password, DataBaseName string
+	Port                               int
 }
 
-var sportsDb = model.DbConnectionSettings{
-	Host:         "localhost",
-	Port:         5433,
-	User:         "postgres",
-	Password:     "postgres",
-	DataBaseName: "sports_club",
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	pgInit := flag.Bool("pg-init", false, "init postgres")
+	pgTest := flag.Bool("pg-test", false, "test postgres")
+	mongoInitFlag := flag.Bool("mongo-init", false, "init mongo")
+	mongoTestFlag := flag.Bool("mongo-test", false, "test mongo")
+	mongoCRUDFlag := flag.Bool("mongo-crud", false, "run mongo CRUD demo")
+
+	flag.Parse()
+
+	switch {
+	case *pgInit:
+		initSportsDb()
+	case *pgTest:
+		testSportClubDb()
+	case *mongoInitFlag:
+		initMongo()
+	case *mongoTestFlag:
+		testMongo()
+	case *mongoCRUDFlag:
+		runMongoCRUD()
+	default:
+		fmt.Println("❌ choose a flag: -pg-init | -pg-test | -mongo-init | -mongo-test | -mongo-crud")
+		os.Exit(1)
+	}
 }
 
-func measure(title string, fn func()) {
-	start := time.Now()
-	fn()
-	fmt.Printf("⏱ %s took %v\n", title, time.Since(start))
+// ====================== POSTGRES ======================
+
+func connectPG(dbCfg DbConnectionSettings) (*sql.DB, error) {
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, dbCfg.DataBaseName)
+	return sql.Open("postgres", dsn)
 }
 
-func crudTests(db *sql.DB) {
-	userID, err := handler.CreateUser(db, "test78@example.com")
+func initSportsDb() {
+	db, err := connectPG(commonDb)
 	if err != nil {
-		log.Fatal("CreateUser:", err)
-	}
-
-	err = handler.CreateCoach(db, userID)
-	if err != nil {
-		log.Fatal("CreateCoach:", err)
-	}
-
-	sportID, err := handler.CreateSport(db, "Pilates")
-	if err != nil {
-		log.Fatal("CreateSport:", err)
-	}
-
-	classID, err := handler.CreateClass(db, sportID, userID)
-	if err != nil {
-		log.Fatal("CreateClass:", err)
-	}
-
-	roomID, err := handler.CreateRoom(db, 20)
-	if err != nil {
-		log.Fatal("CreateRoom:", err)
-	}
-
-	schedID, err := handler.CreateSchedule(
-		db,
-		classID,
-		roomID,
-		time.Now(),
-		time.Now().Add(time.Hour),
-	)
-	if err != nil {
-		log.Fatal("CreateSchedule:", err)
-	}
-
-	bookingID, err := handler.CreateBooking(db, userID, schedID)
-	if err != nil {
-		log.Fatal("CreateBooking:", err)
-	}
-
-	fmt.Printf("✅ Созданы сущности: user=%d, booking=%d\n", userID, bookingID)
-
-	// Очистка
-	handler.DeleteBooking(db, bookingID)
-	handler.DeleteSchedule(db, schedID)
-	handler.DeleteClass(db, classID)
-	handler.DeleteSport(db, sportID)
-	handler.DeleteCoach(db, userID)
-	handler.DeleteUser(db, userID)
-}
-
-func businessCases(db *sql.DB, rdb redis.UniversalClient, ctx context.Context) {
-	fmt.Println("\n📊 Агрегирующие запросы")
-
-	total, _ := service.GetTotalRevenue(db, rdb, ctx)
-	fmt.Printf("Общий доход: $%.2f\n", total)
-
-	avg, _ := service.GetAvgClassRating(db, rdb, ctx)
-	fmt.Printf("Средний рейтинг: %.2f\n", avg)
-
-	service.GetBookingsPerDay(db, rdb, ctx)
-	service.GetTopSportsByAttendance(db, rdb, ctx)
-}
-
-func testSportClubDb() {
-	db, err := handler.InitDataBase(sportsDb)
-	if err != nil {
-		log.Fatal("InitDataBase:", err)
+		log.Fatal(err)
 	}
 	defer db.Close()
 
+	_, err = db.Exec(`CREATE DATABASE sports_club;`)
+	if err != nil {
+		log.Fatal("Database already exists or error:", err)
+	}
+	fmt.Println("✅ Postgres sports_club created")
+}
+
+func testSportClubDb() {
+	db, err := connectPG(sportsDb)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	fmt.Println("✅ Connected to sports_club")
+
+	// Redis demo
 	rdb := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{
-			"localhost:7002",
-			"localhost:7003",
-			"localhost:7004",
-			"localhost:7005",
-			"localhost:7006",
-			"localhost:7007",
-		},
+		Addrs: []string{"localhost:7002", "localhost:7003", "localhost:7004", "localhost:7005", "localhost:7006", "localhost:7007"},
 	})
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatal("cannot connect to Redis:", err)
 	}
-
 	defer rdb.Close()
-
-	exists, err := handler.DbIsExist(db)
-	if err != nil {
-		log.Fatal("DbIsExist:", err)
-	}
-
-	if !exists {
-		log.Fatal("❌ database sports_club does not exist")
-	}
-
-	fmt.Println("✅ Подключение к sports_club")
-
-	crudTests(db)
-
-	fmt.Println("\n🚀 Первый запуск (Redis MISS → Postgres)")
-	measure("businessCases #1", func() {
-		businessCases(db, rdb, ctx)
-	})
-
-	fmt.Println("\n⚡ Второй запуск (Redis HIT)")
-	measure("businessCases #2", func() {
-		businessCases(db, rdb, ctx)
-	})
+	fmt.Println("✅ Connected to Redis")
 }
 
-func initSportsDb() {
-	db, err := handler.InitDataBase(commonDb)
+// ====================== MONGO ======================
+
+func connectMongo() *mongo.Client {
+	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(mongoURI))
 	if err != nil {
-		log.Fatal("InitDataBase:", err)
+		log.Fatal(err)
 	}
-	defer db.Close()
-
-	fmt.Println("✅ Подключение к postgres")
-
-	exists, err := handler.DbIsExist(db)
-	if err != nil {
-		log.Fatal("DbIsExist:", err)
-	}
-
-	if exists {
-		log.Fatal("❌ database sports_club already exists")
-	}
-
-	_, err = db.Exec(`
-		CREATE DATABASE sports_club
-		ENCODING 'UTF8'
-		LC_COLLATE 'en_US.UTF-8'
-		LC_CTYPE 'en_US.UTF-8'
-		TEMPLATE template0;
-	`)
-	if err != nil {
-		log.Fatal("CREATE DATABASE:", err)
-	}
-
-	fmt.Println("✅ database sports_club created")
-
-	dbSports, err := handler.InitDataBase(sportsDb)
-	if err != nil {
-		log.Fatal("InitDataBase:", err)
-	}
-	defer dbSports.Close()
-
-	execSQL := func(path string) {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			log.Fatalf("read %s: %v", path, err)
-		}
-		if _, err := dbSports.Exec(string(content)); err != nil {
-			log.Fatalf("exec %s: %v", path, err)
-		}
-		fmt.Println("✅ executed:", path)
-	}
-
-	execSQL("../configs/sql/init_db.sql")
-	execSQL("../configs/sql/generate_3m_bookings.sql")
+	return client
 }
 
-func main() {
-	initFlag := flag.Bool("init", false, "init sports_club database")
-	testFlag := flag.Bool("test", false, "run tests and queries")
-	flag.Parse()
+func initMongo() {
+	client := connectMongo()
+	defer client.Disconnect(context.Background())
 
-	if *initFlag == *testFlag {
-		fmt.Println("❌ choose exactly one flag: -init or -test")
-		flag.Usage()
-		os.Exit(1)
+	db := client.Database(mongoDB)
+	collections := []string{"users", "classes", "attendance_logs"}
+	for _, c := range collections {
+		_ = db.CreateCollection(context.Background(), c)
+		fmt.Println("✅ created collection:", c)
 	}
+	fmt.Println("🎉 MongoDB init done")
+}
 
-	if *initFlag {
-		initSportsDb()
-	} else {
-		testSportClubDb()
+func testMongo() {
+	client := connectMongo()
+	defer client.Disconnect(context.Background())
+
+	db := client.Database(mongoDB)
+	count, _ := db.Collection("attendance_logs").CountDocuments(context.Background(), bson.M{})
+	fmt.Println("📊 attendance logs:", count)
+}
+
+// ====================== MONGO CRUD DEMO ======================
+
+func runMongoCRUD() {
+	ctx := context.Background()
+	client := connectMongo()
+	defer client.Disconnect(ctx)
+	db := client.Database(mongoDB)
+
+	users := db.Collection("users")
+	classes := db.Collection("classes")
+	attendance := db.Collection("attendance_logs")
+
+	// create coach
+	var coach bson.M
+	err := users.FindOne(ctx, bson.M{"role": "coach"}).Decode(&coach)
+	if err == mongo.ErrNoDocuments {
+		res, _ := users.InsertOne(ctx, bson.M{"email": "coach@sportclub.com", "role": "coach", "loyaltyPoints": 0, "createdAt": time.Now()})
+		coach = bson.M{"_id": res.InsertedID}
+		fmt.Println("➕ Coach created")
 	}
+	coachID := coach["_id"].(primitive.ObjectID)
+
+	// create client
+	var clientUser bson.M
+	err = users.FindOne(ctx, bson.M{"role": "client"}).Decode(&clientUser)
+	if err == mongo.ErrNoDocuments {
+		res, _ := users.InsertOne(ctx, bson.M{"email": "client@sportclub.com", "role": "client", "loyaltyPoints": 100, "createdAt": time.Now()})
+		clientUser = bson.M{"_id": res.InsertedID}
+		fmt.Println("➕ Client created")
+	}
+	clientID := clientUser["_id"].(primitive.ObjectID)
+
+	// insert user
+	resUser, _ := users.InsertOne(ctx, bson.M{"email": "new_user@mail.com", "role": "client", "loyaltyPoints": 100, "createdAt": time.Now()})
+	userID := resUser.InsertedID.(primitive.ObjectID)
+
+	// insert classes
+	classes.InsertMany(ctx, []interface{}{
+		bson.M{"title": "Morning Yoga", "sport": "Yoga", "coachId": coachID, "capacity": 15, "schedule": bson.M{"date": time.Now(), "startTime": "08:00", "endTime": "09:00"}, "bookings": []interface{}{}},
+		bson.M{"title": "Evening Boxing", "sport": "Boxing", "coachId": coachID, "capacity": 20, "schedule": bson.M{"date": time.Now(), "startTime": "19:00", "endTime": "20:00"}, "bookings": []interface{}{}},
+	})
+
+	// updateOne $set
+	users.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$set": bson.M{"email": "updated_user@mail.com"}})
+
+	// updateOne $inc
+	users.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$inc": bson.M{"loyaltyPoints": 50}})
+
+	// push booking
+	classes.UpdateOne(ctx, bson.M{"title": "Morning Yoga"}, bson.M{"$push": bson.M{"bookings": bson.M{"userId": clientID, "bookedAt": time.Now()}}})
+
+	// updateMany
+	users.UpdateMany(ctx, bson.M{"role": "client"}, bson.M{"$set": bson.M{"loyaltyPoints": 0}})
+
+	// deleteMany
+	attendance.DeleteMany(ctx, bson.M{"attendedAt": bson.M{"$lt": time.Now().Add(-30 * 24 * time.Hour)}})
+
+	// upsert
+	users.UpdateOne(ctx, bson.M{"email": "upsert_user@mail.com"}, bson.M{"$set": bson.M{"role": "client", "loyaltyPoints": 50, "createdAt": time.Now()}}, options.Update().SetUpsert(true))
+
+	fmt.Println("✅ MongoDB CRUD demo completed")
 }
