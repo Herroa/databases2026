@@ -2,5 +2,6 @@ docker/pgdata/
 docker/backups/
 docker/redis/node_modules
 docker/redis/*.json
+docker/neo4j/
 rest-api/node_modules
 rest-api/*.json
