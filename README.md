@@ -33,7 +33,7 @@ rs.initiate({
   members: [
     { _id: 0, host: "configsvr:27019" }
   ]
-}) 
+})
 ```
 
 # Инициализация shard1
@@ -69,3 +69,33 @@ rs.initiate({
 
 # Включение шардинга базы данных
 - ```$ sh.enableSharding("sport_club") ```
+
+SELECT full_name FROM user_profiles WHERE user_id=1; — выборка с условием.
+
+INSERT INTO users (email, phone) VALUES ('test@mail.com', '+79995553322'); — вставка строки.
+
+UPDATE users SET phone='+79990001122' WHERE id=1; — обновление данных.
+
+DELETE FROM users WHERE id=3; — удаление строки.
+
+CREATE TABLE test (id SERIAL PRIMARY KEY, name TEXT); — создать таблицу.
+
+DROP TABLE test; — удалить таблицу
+DROP DATABASE test; — удалить базу
+docker exec -it my-postgres psql -U postgres -c "DROP DATABASE sports_club;"
+
+psql commands
+\l                          -- список БД
+\c mydb                     -- переключиться на mydb
+\dt                         -- список таблиц
+\d users                    -- структура таблицы users
+\x                          -- включить вертикальный вывод
+\df                         -- список функций
+\du                         -- список ролей
+\conninfo                   -- текущее подключение
+\q                          -- выход
+
+apt-get update && apt-get install -y nano fish
+SELECT COUNT(*) FROM attendance_logs;  -- должно быть 3000000
+SELECT COUNT(*) FROM users;            -- 50000
+SELECT COUNT(*) FROM payments;         -- 150000
