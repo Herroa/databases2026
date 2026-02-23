@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -55,6 +56,7 @@ func main() {
 	mongoInitFlag := flag.Bool("mongo-init", false, "init mongo")
 	mongoTestFlag := flag.Bool("mongo-test", false, "test mongo")
 	mongoCRUDFlag := flag.Bool("mongo-crud", false, "run mongo CRUD demo")
+	neo4jTestFlag := flag.Bool("neo4j-test", false, "test neo4j")
 
 	flag.Parse()
 
@@ -69,8 +71,10 @@ func main() {
 		testMongo()
 	case *mongoCRUDFlag:
 		runMongoCRUD()
+	case *neo4jTestFlag:
+		testNeo4j()
 	default:
-		fmt.Println("❌ choose a flag: -pg-init | -pg-test | -mongo-init | -mongo-test | -mongo-crud")
+		fmt.Println("❌ choose a flag: -pg-init | -pg-test | -mongo-init | -mongo-test | -mongo-crud | -neo4j-test")
 		os.Exit(1)
 	}
 }
@@ -211,4 +215,182 @@ func runMongoCRUD() {
 	users.UpdateOne(ctx, bson.M{"email": "upsert_user@mail.com"}, bson.M{"$set": bson.M{"role": "client", "loyaltyPoints": 50, "createdAt": time.Now()}}, options.Update().SetUpsert(true))
 
 	fmt.Println("✅ MongoDB CRUD demo completed")
+}
+
+// ====================== NEO4J =============================
+
+func testNeo4j() {
+	driver, err := neo4j.NewDriverWithContext(
+		"neo4j://localhost:7687",
+		neo4j.BasicAuth("neo4j", "password", ""),
+	)
+	if err != nil {
+		log.Fatalf("❌ Cannot create Neo4j driver: %v", err)
+	}
+	defer driver.Close(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := driver.VerifyConnectivity(ctx); err != nil {
+		log.Fatalf("❌ Cannot connect to Neo4j: %v", err)
+	}
+	fmt.Println("✅ Connected to Neo4j")
+
+	session := driver.NewSession(context.Background(), neo4j.SessionConfig{
+		AccessMode: neo4j.AccessModeWrite,
+	})
+	defer session.Close(context.Background())
+
+	session.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(ctx, "MATCH (n) DETACH DELETE n", nil)
+		return nil, err
+	})
+
+	// ====================== Создание данных ======================
+
+	_, err = session.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		queries := []string{
+			// Клиенты
+			`MERGE (:Client {name:'Alice'})`,
+			`MERGE (:Client {name:'Bob'})`,
+
+			// Тренеры
+			`MERGE (:Coach {name:'John'})`,
+			`MERGE (:Coach {name:'Emma'})`,
+
+			// Залы
+			`MERGE (:Room {name:'YogaRoom'})`,
+			`MERGE (:Room {name:'BoxingRoom'})`,
+
+			// Классы
+			`MERGE (:Class {title:'Morning Yoga', sport:'Yoga'})`,
+			`MERGE (:Class {title:'Evening Boxing', sport:'Boxing'})`,
+
+			// Связи классов с тренерами
+			`MATCH (cls:Class {title:'Morning Yoga'}), (t:Coach {name:'John'}) MERGE (cls)-[:TAUGHT_BY]->(t)`,
+			`MATCH (cls:Class {title:'Evening Boxing'}), (t:Coach {name:'Emma'}) MERGE (cls)-[:TAUGHT_BY]->(t)`,
+
+			// Связи классов с залами
+			`MATCH (cls:Class {title:'Morning Yoga'}), (r:Room {name:'YogaRoom'}) MERGE (cls)-[:HELD_IN]->(r)`,
+			`MATCH (cls:Class {title:'Evening Boxing'}), (r:Room {name:'BoxingRoom'}) MERGE (cls)-[:HELD_IN]->(r)`,
+
+			// Записи клиентов на занятия
+			`MATCH (cls:Class {title:'Morning Yoga'}), (c:Client {name:'Alice'}) MERGE (c)-[:BOOKED]->(cls)`,
+			`MATCH (cls:Class {title:'Evening Boxing'}), (c:Client {name:'Bob'}) MERGE (c)-[:BOOKED]->(cls)`,
+		}
+
+		for _, q := range queries {
+			if _, err := tx.Run(ctx, q, nil); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	})
+	if err != nil {
+		log.Fatalf("❌ Cannot create demo data: %v", err)
+	}
+	fmt.Println("✅ Sample data created")
+
+	// ====================== Базовые запросы ======================
+
+	// Какие тренировки посещает клиент?
+	queryClientClasses := func(clientName string) {
+		fmt.Printf("\n📌 Classes for client %s:\n", clientName)
+		titles, err := session.ExecuteRead(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+			result, err := tx.Run(context.Background(),
+				`MATCH (c:Client {name:$name})-[:BOOKED]->(cls:Class) RETURN cls.title`,
+				map[string]any{"name": clientName})
+			if err != nil {
+				return nil, err
+			}
+			var out []string
+			for result.Next(context.Background()) {
+				out = append(out, result.Record().Values[0].(string))
+			}
+			return out, nil
+		})
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		fmt.Println(titles)
+	}
+
+	// Кто является тренером группы?
+	queryClassCoach := func(classTitle string) {
+		fmt.Printf("\n📌 Coach for class %s:\n", classTitle)
+		coaches, err := session.ExecuteRead(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+			result, err := tx.Run(context.Background(),
+				`MATCH (cls:Class {title:$title})-[:TAUGHT_BY]->(t:Coach) RETURN t.name`,
+				map[string]any{"title": classTitle})
+			if err != nil {
+				return nil, err
+			}
+			var out []string
+			for result.Next(context.Background()) {
+				out = append(out, result.Record().Values[0].(string))
+			}
+			return out, nil
+		})
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		fmt.Println(coaches)
+	}
+
+	// Клиенты в одном классе
+	queryClientsForClass := func(classTitle string) {
+		fmt.Printf("\n📌 Clients booked in class %s:\n", classTitle)
+		clients, err := session.ExecuteRead(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+			result, err := tx.Run(context.Background(),
+				`MATCH (c:Client)-[:BOOKED]->(cls:Class {title:$title}) RETURN c.name`,
+				map[string]any{"title": classTitle})
+			if err != nil {
+				return nil, err
+			}
+			var out []string
+			for result.Next(context.Background()) {
+				out = append(out, result.Record().Values[0].(string))
+			}
+			return out, nil
+		})
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		fmt.Println(clients)
+	}
+
+	// ====================== Демонстрация ======================
+	queryClientClasses("Alice")
+	queryClientClasses("Bob")
+	queryClassCoach("Morning Yoga")
+	queryClassCoach("Evening Boxing")
+	queryClientsForClass("Morning Yoga")
+	queryClientsForClass("Evening Boxing")
+
+	// 	#### 5. Спортивный центр
+
+	// **Базовые связи**
+	// - Какие тренировки посещает клиент?
+	// - Кто является тренером группы?
+	// - Какие тренировки проходят в зале?
+	// - Какие клиенты записаны на одно занятие?
+
+	// **Роли**
+	// - Чем отличается тренер от клиента?
+	// - Может ли тренер быть клиентов?
+	// - Кто является администратором зала?
+
+	// **Аналитика**
+	// - Какие клиенты посещают одни и те же тренировки?
+	// - Какие тренеры ведут одинаковые типы занятий?
+	// - Какие клиенты посещают занятия одного тренера?
+
+	// **Сложные графовые связи**
+	// - Через какие тренировки связаны два клиента?
+	// - Через каких тренеров можно связать двух клиентов?
+	// - Какой кратчайший путь между двумя залами через занятия и тренеров?
+
 }
