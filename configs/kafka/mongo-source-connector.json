@@ -1,0 +1,16 @@
+{
+  "name": "sports-users-mongo-source",
+  "config": {
+    "connector.class": "com.mongodb.kafka.connect.MongoSourceConnector",
+    "tasks.max": "1",
+    "connection.uri": "mongodb://localhost:27017",
+    "database": "sport_club",
+    "collection": "users",
+    "topic.prefix": "sports.mongo",
+    "pipeline": "[{\"$match\": {\"operationType\": {\"$in\": [\"insert\", \"update\", \"replace\"]}}}]",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "publish.full.document.only": "true"
+  }
+}
