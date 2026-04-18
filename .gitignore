@@ -3,5 +3,6 @@ docker/backups/
 docker/redis/node_modules
 docker/redis/*.json
 docker/neo4j/
+docker/clickhouse
 rest-api/node_modules
 rest-api/*.json

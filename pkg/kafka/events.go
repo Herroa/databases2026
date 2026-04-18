@@ -11,7 +11,7 @@ import (
 const (
 	TopicEvents        = "sports.events"
 	TopicNotifications = "sports.notifications"
-	TopicAnalytics     = "sports.analytics"
+	TopicAnalytics     = "analytics"
 	TopicDLQ           = "sports.dlq"
 )
 

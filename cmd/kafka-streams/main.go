@@ -1,3 +1,4 @@
+// cmd/kafka-streams/main.go
 package main
 
 import (
@@ -7,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -21,7 +23,7 @@ type AggregateResult struct {
 	WindowStart  time.Time      `json:"windowStart"`
 	WindowEnd    time.Time      `json:"windowEnd"`
 	CountByType  map[string]int `json:"countByType"`
-	WindowCounts map[string]int `json:"windowEntityCounts"` // entityId -> count in window
+	WindowCounts map[string]int `json:"windowEntityCounts"`
 	ProcessedAt  string         `json:"processedAt"`
 }
 
@@ -31,6 +33,29 @@ type EnrichedEvent struct {
 	ProcessingMs int64          `json:"processingMs"`
 	StreamGroup  string         `json:"streamGroup"`
 	Normalized   map[string]any `json:"normalized"`
+}
+
+// writeWithRetry записывает сообщение с повторами при ошибке "неизвестный топик"
+func writeWithRetry(ctx context.Context, w *kafka.Writer, msg kafka.Message, topic string) error {
+	for attempt := 1; attempt <= 5; attempt++ {
+		err := w.WriteMessages(ctx, msg)
+		if err == nil {
+			return nil
+		}
+		// Если топик ещё не готов — подождать и повторить
+		if strings.Contains(err.Error(), "Unknown Topic") || strings.Contains(err.Error(), "UnknownTopicOrPartition") {
+			log.Printf("⏳ Attempt %d: topic %s not ready, waiting 500ms...", attempt, topic)
+			select {
+			case <-time.After(500 * time.Millisecond):
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		// Другие ошибки возвращаем сразу
+		return err
+	}
+	return fmt.Errorf("max retries exceeded for topic %s", topic)
 }
 
 func main() {
@@ -52,21 +77,26 @@ func main() {
 	})
 	defer reader.Close()
 
+	// Writer для аналитики с параметрами повторных попыток
 	analyticsWriter := &kafka.Writer{
-		Addr:     kafka.TCP(brokerAddr),
-		Topic:    kafkapkg.TopicAnalytics,
-		Balancer: &kafka.LeastBytes{},
+		Addr:        kafka.TCP(brokerAddr),
+		Topic:       kafkapkg.TopicAnalytics,
+		Balancer:    &kafka.LeastBytes{},
+		MaxAttempts: 5, // количество попыток отправки
+		RequiredAcks: kafka.RequireOne, // ждать подтверждения от лидера
 	}
 	defer analyticsWriter.Close()
+
+	// Небольшая пауза перед стартом, чтобы брокер обновил метаданные
+	time.Sleep(1 * time.Second)
 
 	var mu sync.Mutex
 	countByType := make(map[string]int)
 
 	windowDuration := 60 * time.Second
 	windowStart := time.Now()
-	windowCounts := make(map[string]int) // entityId -> count in current window
+	windowCounts := make(map[string]int)
 
-	// Ticker to flush aggregations
 	flushTicker := time.NewTicker(10 * time.Second)
 	defer flushTicker.Stop()
 
@@ -85,15 +115,19 @@ func main() {
 					ProcessedAt:  time.Now().UTC().Format(time.RFC3339),
 				}
 
-				// Reset window if expired
 				if t.Sub(windowStart) >= windowDuration {
 					windowCounts = make(map[string]int)
 					windowStart = t
-					log.Println("Window reset")
+					log.Println("🔄 Window reset")
 				}
 				mu.Unlock()
 
-				raw, _ := json.Marshal(result)
+				raw, err := json.Marshal(result)
+				if err != nil {
+					log.Printf("marshal error: %v", err)
+					continue
+				}
+
 				msg := kafka.Message{
 					Key:   []byte("aggregate"),
 					Value: raw,
@@ -101,16 +135,18 @@ func main() {
 						{Key: "type", Value: []byte("window-aggregate")},
 					},
 				}
-				if err := analyticsWriter.WriteMessages(context.Background(), msg); err != nil {
-					log.Printf("analytics write error: %v", err)
+
+				// Запись с обработкой ошибки "неизвестный топик"
+				if err := writeWithRetry(context.Background(), analyticsWriter, msg, kafkapkg.TopicAnalytics); err != nil {
+					log.Printf("❌ analytics write error: %v", err)
 				} else {
-					log.Printf("analytics flushed: %v", result.CountByType)
+					log.Printf("✅ analytics flushed: %v", result.CountByType)
 				}
 			}
 		}
 	}()
 
-	log.Println("kafka-streams processor started")
+	log.Println("🚀 kafka-streams processor started")
 
 	for {
 		msg, err := reader.FetchMessage(ctx)
@@ -154,7 +190,7 @@ func main() {
 		windowCounts[event.EntityID]++
 		mu.Unlock()
 
-		log.Printf("streams [%s] entity=%s | totals=%v",
+		log.Printf("📊 streams [%s] entity=%s | totals=%v",
 			event.EventType, event.EntityID, fmt.Sprintf("%v", countByType))
 
 		if err := reader.CommitMessages(ctx, msg); err != nil {
